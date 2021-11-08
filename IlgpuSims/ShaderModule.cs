@@ -5,13 +5,38 @@ using OpenTK.Graphics.OpenGL4;
 
 namespace IlgpuSims
 {
-    public class ShaderModule : IDisposable
+    public sealed class ShaderModule : IDisposable
     {
+        public readonly int Handle;
+
+        private bool _disposed;
+
+        private ShaderModule(int vert, int frag)
+        {
+            Handle = GL.CreateProgram();
+            GL.AttachShader(Handle, vert);
+            GL.AttachShader(Handle, frag);
+
+            GL.LinkProgram(Handle);
+
+            // No longer need the individual vert/frag shaders after linking
+            GL.DetachShader(Handle, vert);
+            GL.DetachShader(Handle, frag);
+            GL.DeleteShader(vert);
+            GL.DeleteShader(frag);
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
         public static ShaderModule FromPaths(string vertPath, string fragPath)
         {
             static string ReadFile(string path)
             {
-                using StreamReader reader = new StreamReader(path, Encoding.UTF8);
+                using var reader = new StreamReader(path, Encoding.UTF8);
                 return reader.ReadToEnd();
             }
 
@@ -24,32 +49,15 @@ namespace IlgpuSims
             var frag = GetShader(fragSource, ShaderType.FragmentShader);
             return new ShaderModule(vert, frag);
         }
-        
-        public readonly int Handle;
 
         public void Use()
         {
             GL.UseProgram(Handle);
         }
-        
+
         public int GetAttribLocation(string attribName)
         {
             return GL.GetAttribLocation(Handle, attribName);
-        }
-
-        private ShaderModule(int vert, int frag)
-        {
-            Handle = GL.CreateProgram();
-            GL.AttachShader(Handle, vert);
-            GL.AttachShader(Handle, frag);
-            
-            GL.LinkProgram(Handle);
-            
-            // No longer need the individual vert/frag shaders after linking
-            GL.DetachShader(Handle, vert);
-            GL.DetachShader(Handle, frag);
-            GL.DeleteShader(vert);
-            GL.DeleteShader(frag);
         }
 
         private static int GetShader(string source, ShaderType type)
@@ -68,8 +76,7 @@ namespace IlgpuSims
             return shader;
         }
 
-        private bool _disposed = false;
-        protected virtual void Dispose(bool disposing)
+        private void Dispose(bool disposing)
         {
             if (!_disposed)
             {
@@ -81,12 +88,6 @@ namespace IlgpuSims
         ~ShaderModule()
         {
             GL.DeleteProgram(Handle);
-        }
-
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
         }
     }
 }

@@ -11,18 +11,18 @@ using OpenTK.Windowing.GraphicsLibraryFramework;
 
 namespace IlgpuSims
 {
-    public class Window : GameWindow
+    public sealed class Window : GameWindow
     {
         public Window(int width, int height, CudaAccelerator accelerator)
-            : base(GameWindowSettings.Default, new NativeWindowSettings { WindowBorder = WindowBorder.Fixed })
+            : base(GameWindowSettings.Default, new NativeWindowSettings {WindowBorder = WindowBorder.Fixed})
         {
             Size = new Vector2i(width, height);
             Title = "ILGPU/OpenGL interop test";
-            
+
             _accelerator = accelerator;
             _stream = _accelerator.CreateStream() as CudaStream;
             Trace.Assert(_stream != null);
-            
+
             _interopBuff = new CudaGlInteropBuffer(width, height, _accelerator);
         }
 
@@ -38,19 +38,20 @@ namespace IlgpuSims
         protected override void OnLoad()
         {
             base.OnLoad();
-            
+
             GL.ClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-            
+
             _shader = ShaderModule.FromPaths("./shader.vert", "./shader.frag");
             _shader.Use();
-            
+
             _vertexBufferObject = GL.GenBuffer();
             GL.BindBuffer(BufferTarget.ArrayBuffer, _vertexBufferObject);
-            GL.BufferData(BufferTarget.ArrayBuffer, _vertices.Length * sizeof(float), _vertices, BufferUsageHint.StaticDraw);
-            
+            GL.BufferData(BufferTarget.ArrayBuffer, _vertices.Length * sizeof(float), _vertices,
+                BufferUsageHint.StaticDraw);
+
             _vertexArrayObject = GL.GenVertexArray();
             GL.BindVertexArray(_vertexArrayObject);
-            
+
             var vertexLocation = _shader.GetAttribLocation("aPosition");
             GL.EnableVertexAttribArray(vertexLocation);
             GL.VertexAttribPointer(vertexLocation, 3, VertexAttribPointerType.Float, false, 3 * sizeof(float), 0);
@@ -65,37 +66,38 @@ namespace IlgpuSims
 
             _totalTime += args.Time;
             var interopView = _interopBuff.MapCuda(_stream);
-            _accelerator.LaunchAutoGrouped(MakeDummyImageKernel, _stream, new Index2D(Size.X, Size.Y), interopView, (float)_totalTime);
+            _accelerator.LaunchAutoGrouped(MakeDummyImageKernel, _stream, new Index2D(Size.X, Size.Y), interopView,
+                (float) _totalTime);
             _interopBuff.UnmapCuda(_stream);
         }
-        
+
         protected override void OnRenderFrame(FrameEventArgs e)
         {
             base.OnRenderFrame(e);
-            
+
             GL.Clear(ClearBufferMask.ColorBufferBit);
 
             _interopBuff.BindGlTexture(TextureUnit.Texture0);
             _shader.Use();
-            
+
             GL.DrawArrays(PrimitiveType.TriangleStrip, 0, 4);
-            
+
             Context.SwapBuffers();
         }
 
         protected override void OnResize(ResizeEventArgs e)
         {
             base.OnResize(e);
-            
+
             GL.Viewport(0, 0, Size.X, Size.Y);
         }
 
         private readonly CudaAccelerator _accelerator;
         private readonly CudaStream _stream;
-        
+
         private int _vertexBufferObject;
         private int _vertexArrayObject;
-        
+
         private ShaderModule _shader;
         private readonly CudaGlInteropBuffer _interopBuff;
         private double _totalTime = 0;
@@ -107,6 +109,5 @@ namespace IlgpuSims
              1.0f,  1.0f, 0.0f,  // top right
              1.0f, -1.0f, 0.0f,  // bottom right
         };
-
     }
 }

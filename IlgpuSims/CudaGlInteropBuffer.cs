@@ -9,27 +9,21 @@ using OpenTK.Mathematics;
 namespace IlgpuSims
 {
     /// <summary>
-    /// A 2D floating point buffer that can be read from + written to by both OpenGL and CUDA
+    ///     A 2D floating point buffer that can be read from + written to by both OpenGL and CUDA
     /// </summary>
-    public class CudaGlInteropBuffer: MemoryBuffer
+    public sealed class CudaGlInteropBuffer : MemoryBuffer
     {
-        private enum State
-        {
-            AvailableForGl,
-            MappedToCuda,
-        }
-        
         public readonly Vector2i Size;
-        private int _glPboHandle;
-        private int _glTexHandle;
         private IntPtr _cudaResource;
+        private readonly int _glPboHandle;
+        private readonly int _glTexHandle;
         private State _state;
 
         public CudaGlInteropBuffer(int width, int height, CudaAccelerator accelerator)
             : base(accelerator, width * height * sizeof(float), sizeof(float))
         {
             Size = new Vector2i(width, height);
-            
+
             // Create the OpenGL buffers
             _glPboHandle = GL.GenBuffer();
             GL.BindBuffer(BufferTarget.PixelUnpackBuffer, _glPboHandle);
@@ -52,12 +46,12 @@ namespace IlgpuSims
             GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT,
                 (int) TextureWrapMode.ClampToBorder);
             GL.BindTexture(TextureTarget.Texture2D, 0);
-            
+
             // Register the resource with CUDA
             CudaException.ThrowIfFailed(CudaGlInterop.RegisterBuffer(
-                    out _cudaResource,
-                    _glPboHandle,
-                    (int) CudaGraphicsMapFlags.None)); // None => Cuda can both read and write the buffer
+                out _cudaResource,
+                _glPboHandle,
+                (int) CudaGraphicsMapFlags.None)); // None => Cuda can both read and write the buffer
 
             _state = State.AvailableForGl;
         }
@@ -65,10 +59,8 @@ namespace IlgpuSims
         public void BindGlTexture(TextureUnit unit)
         {
             if (_state == State.MappedToCuda)
-            {
                 throw new Exception(
                     "Cannot bind interop buffer to OpenGL texture, as it is still mapped ot CUDA memory");
-            }
 
             GL.ActiveTexture(unit);
         }
@@ -86,15 +78,15 @@ namespace IlgpuSims
                         _state = State.MappedToCuda;
                     }
                 }
-                
+
                 CudaException.ThrowIfFailed(CudaGlInterop.GetMappedPointer(
                     out var devicePtr, out var bufLen, _cudaResource));
                 Trace.Assert(bufLen == Size.X * Size.Y * sizeof(float));
                 NativePtr = devicePtr;
-                
+
                 _state = State.MappedToCuda;
             }
-            
+
             Trace.Assert(NativePtr != IntPtr.Zero);
 
             var viewBase = AsArrayView<float>(0, Length);
@@ -103,7 +95,7 @@ namespace IlgpuSims
 
             return view2d;
         }
-        
+
         public void UnmapCuda(CudaStream stream)
         {
             if (_state == State.MappedToCuda)
@@ -135,17 +127,14 @@ namespace IlgpuSims
                     IntPtr.Zero);
             }
         }
-        
+
         public static void CudaMemSet<T>(CudaStream stream, byte value, in ArrayView<T> targetView)
             where T : unmanaged
         {
             if (stream is null)
                 throw new ArgumentNullException(nameof(stream));
 
-            if (targetView.GetAcceleratorType() != AcceleratorType.Cuda)
-            {
-                throw new NotSupportedException();
-            }
+            if (targetView.GetAcceleratorType() != AcceleratorType.Cuda) throw new NotSupportedException();
 
             var binding = stream.Accelerator.BindScoped();
 
@@ -172,9 +161,7 @@ namespace IlgpuSims
 
             if (sourceType == AcceleratorType.OpenCL ||
                 targetType == AcceleratorType.OpenCL)
-            {
                 throw new NotSupportedException();
-            }
 
             var sourceAddress = sourceView.LoadEffectiveAddressAsPtr();
             var targetAddress = targetView.LoadEffectiveAddressAsPtr();
@@ -193,23 +180,29 @@ namespace IlgpuSims
         }
 
 
-        protected override unsafe void MemSet(
+        protected override void MemSet(
             AcceleratorStream stream,
             byte value,
-            in ArrayView<byte> targetView) =>
+            in ArrayView<byte> targetView)
+        {
             CudaMemSet(stream as CudaStream, value, targetView);
+        }
 
         protected override void CopyFrom(
             AcceleratorStream stream,
             in ArrayView<byte> sourceView,
-            in ArrayView<byte> targetView) =>
+            in ArrayView<byte> targetView)
+        {
             CudaCopy(stream as CudaStream, sourceView, targetView);
+        }
 
-        protected override unsafe void CopyTo(
+        protected override void CopyTo(
             AcceleratorStream stream,
             in ArrayView<byte> sourceView,
-            in ArrayView<byte> targetView) =>
+            in ArrayView<byte> targetView)
+        {
             CudaCopy(stream as CudaStream, sourceView, targetView);
+        }
 
         protected override void DisposeAcceleratorObject(bool disposing)
         {
@@ -217,6 +210,12 @@ namespace IlgpuSims
             // Delete the gl texture
             // Delete the gl pbo
             throw new NotImplementedException();
+        }
+
+        private enum State
+        {
+            AvailableForGl,
+            MappedToCuda
         }
     }
 }

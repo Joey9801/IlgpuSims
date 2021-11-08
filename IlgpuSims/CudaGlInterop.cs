@@ -30,7 +30,7 @@ namespace IlgpuSims
             int count,
             IntPtr resources,
             IntPtr stream);
-        
+
         [DllImport("nvcuda", EntryPoint = "cuGraphicsResourceGetMappedPointer_v2")]
         public static extern CudaError GetMappedPointer(
             out IntPtr devicePtr,
